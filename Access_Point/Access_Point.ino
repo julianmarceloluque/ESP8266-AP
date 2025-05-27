@@ -1,24 +1,118 @@
+/*
+   Copyright (c) 2015, Majenko Technologies
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without modification,
+   are permitted provided that the following conditions are met:
+
+ * * Redistributions of source code must retain the above copyright notice, this
+     list of conditions and the following disclaimer.
+
+ * * Redistributions in binary form must reproduce the above copyright notice, this
+     list of conditions and the following disclaimer in the documentation and/or
+     other materials provided with the distribution.
+
+ * * Neither the name of Majenko Technologies nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+   ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+   DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+   ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+   (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+   LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+   ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/* Create a WiFi access point and provide a web server on it. */
+
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
 
-void setup()
-{
-  Serial.begin(9600);
-  Serial.println();
+#ifndef APSSID
+#define APSSID "ESPap"
+#define APPSK "thereisnospoon"
+#endif
 
-  Serial.print("Setting soft-AP ... ");
-  boolean result = WiFi.softAP("ESPsoftAP_01", "12345678");
-  if(result == true)
-  {
-    Serial.println("Ready");
-  }
-  else
-  {
-    Serial.println("Failed!");
-  }
+/* Set these to your desired credentials. */
+const char *ssid = APSSID;
+//const char *password =;
+
+ESP8266WebServer server(80);
+
+/* Just a little test message.  Go to http://192.168.4.1 in a web browser
+   connected to this access point to see it.
+*/
+void handleRoot() {
+  String html = R"rawliteral(
+  <html>
+  <head>
+    <style>
+      .boton {
+        font-size: 20px;
+        padding: 15px 30px;
+        margin: 10px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 10px;
+      }
+      .boton:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Control de Pin</h1>
+    <a href="/on"><button class="boton">Encender</button></a>
+    <a href="/off"><button class="boton">Apagar</button></a>
+  </body>
+  </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
 }
 
-void loop()
-{
-  Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
-  delay(3000);
+void handleOn() {
+  digitalWrite(LED_BUILTIN, LOW);
+  server.sendHeader("Location", "/"); // Redireccionar a raíz
+  server.send(303);
+}
+
+void handleOff() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  server.sendHeader("Location", "/"); // Redireccionar a raíz
+  server.send(303);
+}
+
+void setup() {
+  delay(1000);
+  Serial.begin(9600);
+  Serial.println();
+  Serial.print("Configuring access point...");
+  /* You can remove the password parameter if you want the AP to be open. */
+  WiFi.softAP(ssid);
+
+  pinMode(LED_BUILTIN, OUTPUT);  // Initialize the LED_BUILTIN pin as an output
+  digitalWrite(LED_BUILTIN, HIGH); // Apagado inicial
+
+  Serial.print("Configuring access point...");
+  WiFi.softAP(ssid);
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP);
+
+  server.on("/", handleRoot);
+  server.on("/on", handleOn);
+  server.on("/off", handleOff);
+  server.begin();
+  Serial.println("HTTP server started");
+}
+
+void loop() {
+  server.handleClient();
 }
