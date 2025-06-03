@@ -7,22 +7,20 @@
 #define APPSK "thereisnospoon"
 #endif
 
-/* Set these to your desired credentials. */
 const char *ssid = APSSID;
 const char *password = APPSK;
 int brillo = 842; // Valor PWM inicial (0 a 1023)
+int brilloPorcentual = 0;
 const int ledPin = LED_BUILTIN;
 
 ESP8266WebServer server(80);
 
 bool ledState = false; // Estado actual del LED
 
-/* Just a little test message.  Go to http://192.168.4.1 in a web browser
-   connected to this access point to see it.
-*/
-
 void handleRoot() {
   String estado = ledState ? "Encendido" : "Apagado";
+  brilloPorcentual = map(brillo, 764, 1023, 0, 100); // Se actualiza correctamente el porcentaje antes de mostrarlo
+
   String html = R"rawliteral(
   <html>
   <head>
@@ -43,23 +41,30 @@ void handleRoot() {
   </head>
   <body>
     <h1>Control de LED</h1>
+
     <p>Estado actual: )rawliteral" + estado + R"rawliteral(</p>
+
     <a href="/on"><button class="boton">Encender</button></a>
     <a href="/off"><button class="boton">Apagar</button></a>
     <a href="/toggle"><button class="boton">TOGGLE</button></a>
-    <p>Brillo: <span id="brillo_val">)rawliteral" + String(brillo) + R"rawliteral(</span></p>
-    <input type="range" min="764" max="1023" value=")rawliteral" + String(brillo) + R"rawliteral(" 
+
+    <p>Brillo: <span id="brillo_val">)rawliteral" + String(brilloPorcentual) + R"rawliteral(%</span></p>
+
+    <!-- ✅ CORREGIDO: el value ahora usa brillo (PWM) directamente -->
+    <input type="range" min="764" max="1023" value=")rawliteral" + String(brillo) + R"rawliteral("
       onchange="ajustarBrillo(this.value)">
-    
+
     <script>
       function ajustarBrillo(val) {
-        document.getElementById('brillo_val').innerText = val;
+        let porcentaje = Math.round((val - 764) * 100 / (1023 - 764));
+        document.getElementById('brillo_val').innerText = porcentaje + "%";
         fetch('/brillo?valor=' + val);
       }
     </script>
   </body>
   </html>
   )rawliteral";
+  
   server.send(200, "text/html", html);
 }
 
@@ -96,11 +101,13 @@ void handleToggle() {
 }
 
 void handleBrillo() {
-    if (server.hasArg("valor")) {
+  if (server.hasArg("valor")) {
     brillo = server.arg("valor").toInt();
+    brilloPorcentual = map(brillo, 764, 1023, 0, 100);
+
     actualizarPWM();
     Serial.print("Brillo actualizado: ");
-    Serial.println(brillo);
+    Serial.println(brilloPorcentual); // Ahora muestra el valor correcto
   }
   server.send(200, "text/plain", "OK");
 }
@@ -111,12 +118,9 @@ void setup() {
   Serial.println();
   Serial.print("Configuring access point...");
 
-
-//  WiFi.softAP("ESP8266","12345678");
   WiFi.softAP(ssid, password);
 
   IPAddress myIP = WiFi.softAPIP();
-  Serial.print("IP local: ");
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
