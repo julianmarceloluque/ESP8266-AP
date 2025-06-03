@@ -10,6 +10,8 @@
 /* Set these to your desired credentials. */
 const char *ssid = APSSID;
 const char *password = APPSK;
+int brillo = 842; // Valor PWM inicial (0 a 1023)
+const int ledPin = LED_BUILTIN;
 
 ESP8266WebServer server(80);
 
@@ -45,31 +47,62 @@ void handleRoot() {
     <a href="/on"><button class="boton">Encender</button></a>
     <a href="/off"><button class="boton">Apagar</button></a>
     <a href="/toggle"><button class="boton">TOGGLE</button></a>
+    <p>Brillo: <span id="brillo_val">)rawliteral" + String(brillo) + R"rawliteral(</span></p>
+    <input type="range" min="764" max="1023" value=")rawliteral" + String(brillo) + R"rawliteral(" 
+      onchange="ajustarBrillo(this.value)">
+    
+    <script>
+      function ajustarBrillo(val) {
+        document.getElementById('brillo_val').innerText = val;
+        fetch('/brillo?valor=' + val);
+      }
+    </script>
   </body>
   </html>
   )rawliteral";
   server.send(200, "text/html", html);
 }
 
+void actualizarPWM() {
+  if (ledState) {
+    analogWrite(ledPin, 1023 - brillo); // Inverso porque LED va de HIGH a LOW
+  } else {
+    analogWrite(ledPin, 1023); // Apagar
+  }
+}
+
 void handleOn() {
-  digitalWrite(LED_BUILTIN, LOW); // Encender (inverso en ESP8266)
+  digitalWrite(ledPin, LOW); // Encender (inverso en ESP8266)
   ledState = true;
+  actualizarPWM();
   server.sendHeader("Location", "/");
   server.send(303);
 }
 
 void handleOff() {
-  digitalWrite(LED_BUILTIN, HIGH); // Apagar
+  digitalWrite(ledPin, HIGH); // Apagar
   ledState = false;
+  actualizarPWM();
   server.sendHeader("Location", "/");
   server.send(303);
 }
 
 void handleToggle() {
   ledState = !ledState;
-  digitalWrite(LED_BUILTIN, ledState ? LOW : HIGH); // Toggle LED
+  digitalWrite(ledPin, ledState ? LOW : HIGH); // Toggle LED
+  actualizarPWM();
   server.sendHeader("Location", "/");
   server.send(303);
+}
+
+void handleBrillo() {
+    if (server.hasArg("valor")) {
+    brillo = server.arg("valor").toInt();
+    actualizarPWM();
+    Serial.print("Brillo actualizado: ");
+    Serial.println(brillo);
+  }
+  server.send(200, "text/plain", "OK");
 }
 
 void setup() {
@@ -87,13 +120,14 @@ void setup() {
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH); // Apagar inicialmente (HIGH en ESP8266)
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, HIGH); // Apagar inicialmente (HIGH en ESP8266)
 
   server.on("/", handleRoot);
   server.on("/on", handleOn);
   server.on("/off", handleOff);
   server.on("/toggle", handleToggle);
+  server.on("/brillo", handleBrillo);
   server.begin();
   Serial.println("HTTP server started");
 }
